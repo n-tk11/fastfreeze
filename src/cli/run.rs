@@ -81,49 +81,49 @@ pub struct Run {
     /// It defaults to file:$HOME/.fastfreeze/<app_name>
     // {n} means new line in the CLI's --help command
     #[structopt(short, long, name="url")]
-    image_url: Option<String>,
+    pub image_url: Option<String>,
 
     /// Application command, used when running the app from scratch.
     /// When absent, FastFreeze runs in restore-only mode.
     #[structopt()]
-    app_args: Vec<OsString>,
+    pub app_args: Vec<OsString>,
 
     /// Shell command to run once the application is running.
     // Note: Type should be OsString, but structopt doesn't like it
     #[structopt(long="on-app-ready", name="cmd")]
-    on_app_ready_cmd: Option<String>,
+    pub on_app_ready_cmd: Option<String>,
 
     /// Always run the app from scratch. Useful to ignore a faulty image.
     #[structopt(long)]
-    no_restore: bool,
+    pub no_restore: bool,
 
     /// Allow restoring of images that don't match the version we expect.
     #[structopt(long)]
-    allow_bad_image_version: bool,
+    pub allow_bad_image_version: bool,
 
     /// Provide a file containing the passphrase to be used for encrypting
     /// or decrypting the image. For security concerns, using a ramdisk
     /// like /dev/shm to store the passphrase file is preferable.
     #[structopt(long)]
-    passphrase_file: Option<PathBuf>,
+    pub passphrase_file: Option<PathBuf>,
 
     /// Dir/file to include in the checkpoint image.
     /// May be specified multiple times. Multiple paths can also be specified colon separated.
     // require_delimiter is set to avoid clap's non-standard way of accepting lists.
     #[structopt(long="preserve-path", name="path", require_delimiter=true, value_delimiter=":")]
-    preserved_paths: Vec<PathBuf>,
+    pub preserved_paths: Vec<PathBuf>,
 
     /// Remap the TCP listen socket ports during restore.
     /// Format is old_port:new_port.
     /// Multiple tcp port remaps may be passed as a comma separated list.
     // We use String because we just pass the argument directly to criu-image-streamer.
     #[structopt(long, require_delimiter = true)]
-    tcp_listen_remap: Vec<String>,
+    pub tcp_listen_remap: Vec<String>,
 
     /// Leave application stopped after restore, useful for debugging.
     /// Has no effect when running the app from scratch.
     #[structopt(long)]
-    leave_stopped: bool,
+    pub leave_stopped: bool,
 
     /// Verbosity. Can be repeated
     #[structopt(short, long, parse(from_occurrences))]
@@ -133,12 +133,12 @@ pub struct Run {
     /// when running multiple ones. The default is the file name of the image-url.
     /// Note: application specific files are located in /tmp/fastfreeze/<app_name>.
     #[structopt(short="n", long)]
-    app_name: Option<String>,
+    pub app_name: Option<String>,
 
     /// Avoid the use of user, mount, or pid namespaces for running the application.
     /// This requires to run the install command prior.
     #[structopt(long)]
-    no_container: bool,
+    pub no_container: bool,
 }
 
 /// `AppConfig` is created during the run command, and updated during checkpoint.
@@ -352,6 +352,7 @@ fn run_from_scratch(
     app_cmd: Vec<OsString>,
 ) -> Result<()>
 {
+    println!("Enter run_from_scratch");
     let inherited_resources = criu::InheritableResources::current()?;
 
     let config = AppConfig {
@@ -397,7 +398,7 @@ fn run_from_scratch(
     cmd.spawn_with_pid(APP_ROOT_PID)?;
 
     info!("Application is ready, started from scratch");
-
+    println!("Finishing run from scratch");
     Ok(())
 }
 
@@ -407,6 +408,7 @@ pub enum RunMode {
 }
 
 pub fn determine_run_mode(store: &dyn Store, allow_bad_image_version: bool) -> Result<RunMode> {
+    println!("Going to determine run mode");
     let fetch_result = with_metrics("fetch_manifest",
         || ImageManifest::fetch_from_store(store, allow_bad_image_version),
         |fetch_result| match fetch_result {
@@ -467,7 +469,7 @@ fn do_run(
         .wait_for_success()?;
 
     ensure_non_conflicting_pid()?;
-
+    println!("Entering Do Run");
     // We prepare the store for writes to speed up checkpointing. Notice that
     // we also prepare the store during restore, because we want to make sure
     // we can checkpoint after a restore.
@@ -543,6 +545,7 @@ fn default_image_name(app_args: &[OsString]) -> Result<String> {
 
 impl super::CLI for Run {
     fn run(self) -> Result<()> {
+        println!("Start Run:run(), with verbal={}",self.verbose);
         let inner = || -> Result<()> {
             let Self {
                 image_url, app_args, on_app_ready_cmd, no_restore,
@@ -551,6 +554,15 @@ impl super::CLI for Run {
                 no_container } = self;
 
             // We allow app_args to be empty. This indicates a restore-only mode.
+
+            for os_str in &app_args {
+                if let Some(s) = os_str.to_str() {
+                    println!("{}", s);
+                } else {
+                    eprintln!("Unable to convert OsString to a valid string");
+                }
+            }
+            
             let app_args = if app_args.is_empty() {
                 info!("Running in restore-only mode as no command is given");
                 None
@@ -559,7 +571,7 @@ impl super::CLI for Run {
                 Some(app_args)
             };
 
-
+            println!("url_matching");
             let image_url = match (image_url, app_args.as_ref()) {
                 (Some(image_url), _) => image_url,
                 (None, None) =>
@@ -572,32 +584,43 @@ impl super::CLI for Run {
                 }
             };
             let image_url = ImageUrl::parse(&image_url)?;
-
+            println!("finish image parse");
             let nscaps = container::ns_capabilities()?;
             // Note: the following may fork a child to enter the new PID namespace,
             // The parent will be kept running to monitor the child.
             // The execution continues as the child process.
+            println!("finish check ns_cap");
             use container::NSCapabilities as Cap;
             match (app_name, no_container, &nscaps, install::is_ff_installed()?) {
-                (Some(_),    true,  _, _    ) => bail!("--app-name and --no-container are mutually exclusive"),
-                (_,          true,  _, false) => bail!("`fastfreeze install` must first be ran"),
+                (Some(_),    true,  _, _    ) => println!("--app-name and --no-container are mutually exclusive"),
+                (_,          true,  _, false) => println!("`fastfreeze install` must first be ran"),
 
-                (Some(name), false, Cap::Full, _) => container::create(&name)?,
-                (None,       false, Cap::Full, _) => container::create(image_url.image_name())?,
-                (Some(_),    false, _,         _) => bail!("--app-name cannot be used as PID namespaces are not available"),
+                (Some(name), false, Cap::Full, _) => {
+                    println!("case 3");
+                    container::create(&name)?
+                },
+                (None,       false, Cap::Full, _) => {
+                    println!("case 4");
+                    container::create(image_url.image_name())?
+                },
+                (Some(_),    false, _,         _) => println!("--app-name cannot be used as PID namespaces are not available"),
 
-                (None,       false, Cap::MountOnly, false) => container::create_without_pid_ns()?,
-                (None,       false, Cap::None,      false) => bail!("`fastfreeze install` must first be ran \
+                (None,       false, Cap::MountOnly, false) => { 
+                    println!("case 6");
+                    container::create_without_pid_ns()?
+                },
+                (None,       false, Cap::None,      false) => println!("`fastfreeze install` must first be ran \
                                                                     as namespaces are not available"),
-                (None,       _,     _,              true) => {},
+                (None,       _,     _,              true) => {println!("Final case");},
             };
-
+            println!("Going to check passphrase");
             if let Some(ref passphrase_file) = passphrase_file {
                 check_passphrase_file_exists(passphrase_file)?;
             }
-
+            println!("Finised check passphrase");
             let preserved_paths = preserved_paths.into_iter().collect();
-
+            
+            println!("Going to do_run");
             with_checkpoint_restore_lock(|| do_run(
                 image_url, app_args, preserved_paths, tcp_listen_remap,
                 passphrase_file, no_restore, allow_bad_image_version,
@@ -612,6 +635,7 @@ impl super::CLI for Run {
             let app_exit_result = monitor_child(Pid::from_raw(APP_ROOT_PID));
             if app_exit_result.is_ok() {
                 info!("Application exited with exit_code=0");
+                println!("App exited");
             }
 
             // The existance of the app config indicates if the app may b
@@ -619,7 +643,7 @@ impl super::CLI for Run {
             if let Err(e) = AppConfig::remove() {
                 error!("{}, but it's okay", e);
             }
-
+            println!("End run()");
             app_exit_result
         };
 
@@ -639,3 +663,5 @@ impl super::CLI for Run {
         )
     }
 }
+
+//TODO: Implement a method to create new Run instance from http request(eg. json) -> then we can make the attributes private again!!

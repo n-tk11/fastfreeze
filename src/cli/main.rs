@@ -12,18 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use anyhow::Result;
-use structopt::{StructOpt, clap::AppSettings};
-use serde::Serialize;
-use crate::logger;
 use super::{
-    CLI,
-    checkpoint::Checkpoint,
-    extract::Extract,
-    install::Install,
-    run::Run,
-    wait::Wait,
+    checkpoint::Checkpoint, daemon::Daemon, extract::Extract, install::Install, run::Run,
+    wait::Wait, CLI,
 };
+use crate::logger;
+use anyhow::Result;
+use serde::Serialize;
+use structopt::{clap::AppSettings, StructOpt};
 
 #[derive(StructOpt, PartialEq, Debug, Serialize)]
 #[structopt(
@@ -35,7 +31,8 @@ use super::{
     // subcommand version is not useful, disable it.
     global_setting(AppSettings::VersionlessSubcommands),
 )]
-#[structopt(after_help("    restore-only is achieved by using \
+#[structopt(after_help(
+    "    restore-only is achieved by using \
 the `run` subcommand without passing the application command-line arguments"
 ))]
 pub struct Opts {
@@ -50,6 +47,7 @@ enum Command {
     Extract(Extract),
     Wait(Wait),
     Install(Install),
+    Daemon(Daemon),
 }
 
 impl Opts {
@@ -59,11 +57,12 @@ impl Opts {
     // clap should be better
     fn verbosity(&self) -> u8 {
         match self.command {
-            Command::Install(Install { verbose, .. }) |
-            Command::Run(Run { verbose, .. }) |
-            Command::Checkpoint(Checkpoint { verbose, .. }) |
-            Command::Extract(Extract { verbose, .. }) |
-            Command::Wait(Wait { verbose, .. }) => verbose,
+            Command::Install(Install { verbose, .. })
+            | Command::Run(Run { verbose, .. })
+            | Command::Checkpoint(Checkpoint { verbose, .. })
+            | Command::Extract(Extract { verbose, .. })
+            | Command::Wait(Wait { verbose, .. })
+            | Command::Daemon(Daemon { verbose, .. }) => verbose,
         }
     }
 
@@ -77,21 +76,19 @@ impl Opts {
 
     fn log_prefix(&self) -> &'static str {
         match self.command {
-            Command::Install(_)    => "install",
-            Command::Run(_)        => "run",
+            Command::Install(_) => "install",
+            Command::Run(_) => "run",
             Command::Checkpoint(_) => "checkpoint",
-            Command::Extract(_)    => "extract",
-            Command::Wait(_)       => "wait",
+            Command::Extract(_) => "extract",
+            Command::Wait(_) => "wait",
+            Command::Daemon(_) => "daemon",
         }
     }
 
     fn use_log_file(&self) -> bool {
         // Persisting a log file is helpful to carry the history of the
         // application in the checkpointed image.
-        matches!(self.command,
-            Command::Run(_) |
-            Command::Checkpoint(_)
-        )
+        matches!(self.command, Command::Run(_) | Command::Checkpoint(_))
     }
 
     pub fn init_logger(&self) -> Result<()> {
@@ -102,11 +99,12 @@ impl Opts {
 impl CLI for Opts {
     fn run(self) -> Result<()> {
         match self.command {
-            Command::Install(opts)    => opts.run(),
-            Command::Run(opts)        => opts.run(),
+            Command::Install(opts) => opts.run(),
+            Command::Run(opts) => opts.run(),
             Command::Checkpoint(opts) => opts.run(),
-            Command::Extract(opts)    => opts.run(),
-            Command::Wait(opts)       => opts.run(),
+            Command::Extract(opts) => opts.run(),
+            Command::Wait(opts) => opts.run(),
+            Command::Daemon(opts) => opts.run(),
         }
     }
 }

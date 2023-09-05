@@ -12,12 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub mod run;
 mod checkpoint;
+mod daemon;
 mod extract;
-mod wait;
 pub mod install;
 mod main;
+pub mod run;
+mod wait;
 
 use crate::consts::*;
 

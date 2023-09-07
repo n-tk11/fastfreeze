@@ -27,6 +27,7 @@ use nix::{
 };
 use structopt::StructOpt;
 use serde::{Serialize, Deserialize};
+use serde_json;
 use crate::{
     consts::*,
     store::{ImageUrl, Store},
@@ -45,7 +46,22 @@ use crate::{
     criu,
 };
 use virt::time::Nanos;
+use shlex::Shlex;
 
+//Run Json Instance
+#[derive(Debug, Serialize, Deserialize)]
+struct Runj {
+    app_args: String,
+    image_url: String,
+    on_app_ready: String,
+    passphrase_file: String,
+    preserved_paths: String,
+    no_restore: bool,
+    allow_bad_image: bool,
+    leave_stopped: bool,
+    verbose: u8,
+    
+}
 
 /// Run application.
 /// If a checkpoint image exists, the application is restored. Otherwise, the
@@ -81,49 +97,49 @@ pub struct Run {
     /// It defaults to file:$HOME/.fastfreeze/<app_name>
     // {n} means new line in the CLI's --help command
     #[structopt(short, long, name="url")]
-    pub image_url: Option<String>,
+    image_url: Option<String>,
 
     /// Application command, used when running the app from scratch.
     /// When absent, FastFreeze runs in restore-only mode.
     #[structopt()]
-    pub app_args: Vec<OsString>,
+    app_args: Vec<OsString>,
 
     /// Shell command to run once the application is running.
     // Note: Type should be OsString, but structopt doesn't like it
     #[structopt(long="on-app-ready", name="cmd")]
-    pub on_app_ready_cmd: Option<String>,
+    on_app_ready_cmd: Option<String>,
 
     /// Always run the app from scratch. Useful to ignore a faulty image.
     #[structopt(long)]
-    pub no_restore: bool,
+    no_restore: bool,
 
     /// Allow restoring of images that don't match the version we expect.
     #[structopt(long)]
-    pub allow_bad_image_version: bool,
+    allow_bad_image_version: bool,
 
     /// Provide a file containing the passphrase to be used for encrypting
     /// or decrypting the image. For security concerns, using a ramdisk
     /// like /dev/shm to store the passphrase file is preferable.
     #[structopt(long)]
-    pub passphrase_file: Option<PathBuf>,
+    passphrase_file: Option<PathBuf>,
 
     /// Dir/file to include in the checkpoint image.
     /// May be specified multiple times. Multiple paths can also be specified colon separated.
     // require_delimiter is set to avoid clap's non-standard way of accepting lists.
     #[structopt(long="preserve-path", name="path", require_delimiter=true, value_delimiter=":")]
-    pub preserved_paths: Vec<PathBuf>,
+    preserved_paths: Vec<PathBuf>,
 
     /// Remap the TCP listen socket ports during restore.
     /// Format is old_port:new_port.
     /// Multiple tcp port remaps may be passed as a comma separated list.
     // We use String because we just pass the argument directly to criu-image-streamer.
     #[structopt(long, require_delimiter = true)]
-    pub tcp_listen_remap: Vec<String>,
+    tcp_listen_remap: Vec<String>,
 
     /// Leave application stopped after restore, useful for debugging.
     /// Has no effect when running the app from scratch.
     #[structopt(long)]
-    pub leave_stopped: bool,
+    leave_stopped: bool,
 
     /// Verbosity. Can be repeated
     #[structopt(short, long, parse(from_occurrences))]
@@ -133,12 +149,12 @@ pub struct Run {
     /// when running multiple ones. The default is the file name of the image-url.
     /// Note: application specific files are located in /tmp/fastfreeze/<app_name>.
     #[structopt(short="n", long)]
-    pub app_name: Option<String>,
+    app_name: Option<String>,
 
     /// Avoid the use of user, mount, or pid namespaces for running the application.
     /// This requires to run the install command prior.
     #[structopt(long)]
-    pub no_container: bool,
+    no_container: bool,
 }
 
 /// `AppConfig` is created during the run command, and updated during checkpoint.
@@ -662,6 +678,44 @@ impl super::CLI for Run {
             }
         )
     }
+
 }
 
-//TODO: Implement a method to create new Run instance from http request(eg. json) -> then we can make the attributes private again!!
+pub fn new_from_json(data: String)-> Run {
+    let r: Runj = serde_json::from_str(&data).unwrap();
+    let splited_args: Vec<String> = Shlex::new(&r.app_args).collect();
+
+    let os_args: Vec<OsString> = match splited_args.is_empty() {
+        false => splited_args.into_iter().map(OsString::from).collect(),
+        true => Vec::new()
+    };
+    let img_url: Option<String> = match r.image_url.as_str() {
+        "" => None,
+        _ => Some(r.image_url)
+    };
+    let on_app_ready: Option<String> = match r.on_app_ready.as_str() {
+        "" => None,
+        _ => Some(r.on_app_ready)
+    };
+    let passphrase_file: Option<PathBuf> = match r.passphrase_file.as_str()  {
+        "" => None,
+        _ => Some(PathBuf::from(r.passphrase_file))
+    };
+    let preserved_paths: Vec<PathBuf> = r.preserved_paths.split(':')
+                                        .map(PathBuf::from)
+                                        .collect();
+    Run {
+        app_args: os_args,
+        image_url: img_url,
+        on_app_ready_cmd: on_app_ready,
+        passphrase_file: passphrase_file,
+        preserved_paths: preserved_paths,
+        no_restore: r.no_restore,
+        allow_bad_image_version: r.allow_bad_image,
+        leave_stopped: r.leave_stopped,
+        verbose: r.verbose,
+        tcp_listen_remap: Vec::new(),
+        app_name: None,
+        no_container: false
+    }
+}

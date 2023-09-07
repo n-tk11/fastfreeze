@@ -23,6 +23,11 @@ url = "2.1"
 chrono = "0.4"
 hostname = "0.3"
 caps = "0.5"
+hyper = { version = "0.14", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+http-body-util = "0.1.0-rc.3"
+hyper-util = { git = "https://github.com/hyperium/hyper-util.git" }
+shlex = "1.2.0"
 
 [profile.release]
 lto = true

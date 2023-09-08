@@ -16,10 +16,18 @@ use super::{
     checkpoint::Checkpoint, daemon::Daemon, extract::Extract, install::Install, run::Run,
     wait::Wait, CLI,
 };
-use crate::logger;
+use crate::{
+    logger,
+    consts::*,
+    process::monitor_child,
+};
+
 use anyhow::Result;
 use serde::Serialize;
 use structopt::{clap::AppSettings, StructOpt};
+use nix::unistd::Pid;
+
+use super::run::AppConfig;
 
 #[derive(StructOpt, PartialEq, Debug, Serialize)]
 #[structopt(
@@ -100,7 +108,23 @@ impl CLI for Opts {
     fn run(self) -> Result<()> {
         match self.command {
             Command::Install(opts) => opts.run(),
-            Command::Run(opts) => opts.run(),
+            Command::Run(opts) => {
+                opts.run()?;
+                let app_exit_result = monitor_child(Pid::from_raw(APP_ROOT_PID));
+                if app_exit_result.is_ok() {
+                    info!("Application exited with exit_code=0");
+                    println!("App exited");
+                }
+
+                // The existance of the app config indicates if the app may b
+                // running (see is_app_running()), so it's better to take it out.
+                if let Err(e) = AppConfig::remove() {
+                    error!("{}, but it's okay", e);
+                }
+                println!("End run()");
+                app_exit_result
+
+            },
             Command::Checkpoint(opts) => opts.run(),
             Command::Extract(opts) => opts.run(),
             Command::Wait(opts) => opts.run(),

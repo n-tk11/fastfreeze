@@ -60,8 +60,9 @@ async fn handle_connection(req: Request<Body>) -> Result<Response<Body>, Infalli
             let body_bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
             let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
             let instance = new_from_json(body_str);
-
+            
             let _ = instance.run();
+           
             Ok(Response::builder()
                 .status(hyper::StatusCode::OK)
                 .body(Body::from("App start successfully"))

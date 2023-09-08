@@ -19,7 +19,8 @@ use std::{
     ffi::OsString,
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, Duration}
+    time::{SystemTime, Duration},
+    thread,
 };
 use nix::{
     sys::signal,
@@ -35,7 +36,7 @@ use crate::{
     cli::{ExitCode, install},
     image::{ManifestFetchResult, ImageManifest, shard, check_passphrase_file_exists},
     process::{Command, CommandPidExt, ProcessExt, ProcessGroup, Stdio,
-              spawn_set_ns_last_pid_server, set_ns_last_pid, monitor_child, MIN_PID},
+              spawn_set_ns_last_pid_server, set_ns_last_pid, MIN_PID},
     metrics::{with_metrics, with_metrics_raw, metrics_error_json},
     signal::kill_process_tree,
     util::JsonMerge,
@@ -47,6 +48,8 @@ use crate::{
 };
 use virt::time::Nanos;
 use shlex::Shlex;
+
+
 
 //Run Json Instance
 #[derive(Debug, Serialize, Deserialize)]
@@ -411,6 +414,8 @@ fn run_from_scratch(
     // the application root process reparents the orphans.
     cmd.set_child_subreaper();
 
+    
+    thread::sleep(Duration::from_secs(5));
     cmd.spawn_with_pid(APP_ROOT_PID)?;
 
     info!("Application is ready, started from scratch");
@@ -559,6 +564,7 @@ fn default_image_name(app_args: &[OsString]) -> Result<String> {
     })
 }
 
+
 impl super::CLI for Run {
     fn run(self) -> Result<()> {
         println!("Start Run:run(), with verbal={}",self.verbose);
@@ -647,7 +653,8 @@ impl super::CLI for Run {
                 Command::new_shell(&on_app_ready_cmd)
                     .spawn()?;
             }
-
+            Ok(())
+            /*
             let app_exit_result = monitor_child(Pid::from_raw(APP_ROOT_PID));
             if app_exit_result.is_ok() {
                 info!("Application exited with exit_code=0");
@@ -661,6 +668,7 @@ impl super::CLI for Run {
             }
             println!("End run()");
             app_exit_result
+            */
         };
 
         // We use `with_metrics` to log the exit_code of the application and run time duration

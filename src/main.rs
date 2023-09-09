@@ -63,7 +63,7 @@ fn main() {
 
         let opts = cli::Opts::from_args();
         opts.init_logger()?;
-        opts.run()
+        opts.run(None)
     }
 
     if let Err(e) = do_main() {

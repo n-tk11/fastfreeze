@@ -14,7 +14,8 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
-use tokio;
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 enum Command {
     Run(Run),
@@ -32,7 +33,7 @@ pub struct Daemon {
 }
 
 impl super::CLI for Daemon {
-    fn run(self) -> Result<()> {
+    fn run(self,_:Option<Arc<Notify>>) -> Result<()> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -51,7 +52,10 @@ async fn run_http_server() -> Result<(), hyper::Error> {
 
     println!("Listening on http://{}", addr);
 
-    server.await
+    let graceful = server.with_graceful_shutdown(shutdown_signal());
+
+    // Run this server for... forever!
+    graceful.await
 }
 
 async fn handle_connection(req: Request<Body>) -> Result<Response<Body>, Infallible> {
@@ -60,12 +64,16 @@ async fn handle_connection(req: Request<Body>) -> Result<Response<Body>, Infalli
             let body_bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
             let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
             let instance = new_from_json(body_str);
+            let notify = Arc::new(Notify::new());
+            let notify2 = notify.clone(); 
+            tokio::task::spawn_blocking(move ||{
+                let _ = instance.run(Some(notify2));
+            });
             
-            let _ = instance.run();
-           
+            notify.notified().await;
             Ok(Response::builder()
                 .status(hyper::StatusCode::OK)
-                .body(Body::from("App start successfully"))
+                .body(Body::from("App start successfully\n"))
                 .unwrap())
         },
         (&Method::POST, "/checkpoint") => {
@@ -81,4 +89,12 @@ async fn handle_connection(req: Request<Body>) -> Result<Response<Body>, Infalli
                 .unwrap())
         },
     }
+}
+
+
+async fn shutdown_signal() {
+    // Wait for the CTRL+C signal
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install CTRL+C signal handler");
 }

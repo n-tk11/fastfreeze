@@ -54,16 +54,16 @@ pub fn emit_metrics(event: Value) -> Result<Option<Process>> {
     Ok(Some(p))
 }
 
-pub fn with_metrics_raw<F,M,R>(action: &str, f: F, metrics_f: M) -> Result<R>
-    where F: FnOnce() -> Result<R>,
+pub fn with_metrics_raw<F,M,R,Args>(action: &str, f: F, args: Args, metrics_f: M) -> Result<R>
+    where F: FnOnce(Args) -> Result<R>,
           M: Fn(&Result<R>) -> Value
 {
     if METRICS_RECORDER_PATH.is_none() {
-        return f();
+        return f(args);
     }
 
     let start_time = Instant::now();
-    let result = f();
+    let result = f(args);
     let event = json!({
         "action": action,
         "duration": start_time.elapsed().as_secs_f64(),
@@ -76,11 +76,11 @@ pub fn with_metrics_raw<F,M,R>(action: &str, f: F, metrics_f: M) -> Result<R>
     result
 }
 
-pub fn with_metrics<F,M,R>(action: &str, f: F, metrics_f: M) -> Result<R>
-    where F: FnOnce() -> Result<R>,
+pub fn with_metrics<F,M,R,Args>(action: &str, f: F,args: Args, metrics_f: M) -> Result<R>
+    where F: FnOnce(Args) -> Result<R>,
           M: Fn(&R) -> Value
 {
-    with_metrics_raw(action, f, |result|
+    with_metrics_raw(action, f, args,|result|
         match result {
             Ok(result) => json!({
                 "outcome": "success",

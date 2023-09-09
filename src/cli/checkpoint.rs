@@ -42,6 +42,8 @@ use crate::{
 };
 use super::run::AppConfig;
 
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 /// Perform a checkpoint of the running application
 #[derive(StructOpt, PartialEq, Debug, Serialize)]
@@ -315,7 +317,7 @@ pub fn do_checkpoint(opts: Checkpoint) -> Result<Stats> {
 }
 
 impl super::CLI for Checkpoint {
-    fn run(self) -> Result<()> {
+    fn run(self,_:Option<Arc<Notify>>) -> Result<()> {
         container::maybe_nsenter_app(self.app_name.as_ref())?;
 
         // Holding the lock while invoking the metrics CLI is preferable to avoid
@@ -323,7 +325,7 @@ impl super::CLI for Checkpoint {
         with_checkpoint_restore_lock(|| {
             let leave_running = self.leave_running;
             with_metrics("checkpoint",
-                || do_checkpoint(self),
+                |_| do_checkpoint(self),1,
                 |stats| json!({"stats": stats}))?;
 
             // We kill the app after the metrics are emitted. Killing the app

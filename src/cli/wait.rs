@@ -20,7 +20,8 @@ use crate::{
     container,
     lock::checkpoint_restore_lock,
 };
-
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 /// Wait for checkpoint or restore to finish
 #[derive(StructOpt, PartialEq, Debug, Serialize)]
@@ -40,7 +41,7 @@ pub struct Wait {
 }
 
 impl super::CLI for Wait {
-    fn run(self) -> Result<()> {
+    fn run(self, _:Option<Arc<Notify>>) -> Result<()> {
         let Self { timeout, app_name, verbose: _ } = self;
         let timeout = timeout.map(|t| Instant::now() + Duration::from_secs_f64(t));
 

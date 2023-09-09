@@ -22,6 +22,9 @@ use crate::{
     container,
 };
 
+use std::sync::Arc;
+use tokio::sync::Notify;
+
 /// Install FastFreeze, required when namespaces are not available (e.g., Docker).
 #[derive(StructOpt, PartialEq, Debug, Serialize)]
 pub struct Install {
@@ -71,7 +74,7 @@ pub fn prepare_ff_dir() -> Result<()> {
 }
 
 impl super::CLI for Install {
-    fn run(self) -> Result<()> {
+    fn run(self,_:Option<Arc<Notify>>) -> Result<()> {
         let Self { verbose: _, force } = self;
 
         match (container::ns_capabilities()?.can_mount_ns(), force) {

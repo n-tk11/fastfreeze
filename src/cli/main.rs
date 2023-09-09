@@ -18,16 +18,14 @@ use super::{
 };
 use crate::{
     logger,
-    consts::*,
-    process::monitor_child,
 };
 
 use anyhow::Result;
 use serde::Serialize;
 use structopt::{clap::AppSettings, StructOpt};
-use nix::unistd::Pid;
 
-use super::run::AppConfig;
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 #[derive(StructOpt, PartialEq, Debug, Serialize)]
 #[structopt(
@@ -105,30 +103,14 @@ impl Opts {
 }
 
 impl CLI for Opts {
-    fn run(self) -> Result<()> {
+    fn run(self,_:Option<Arc<Notify>>) -> Result<()> {
         match self.command {
-            Command::Install(opts) => opts.run(),
-            Command::Run(opts) => {
-                opts.run()?;
-                let app_exit_result = monitor_child(Pid::from_raw(APP_ROOT_PID));
-                if app_exit_result.is_ok() {
-                    info!("Application exited with exit_code=0");
-                    println!("App exited");
-                }
-
-                // The existance of the app config indicates if the app may b
-                // running (see is_app_running()), so it's better to take it out.
-                if let Err(e) = AppConfig::remove() {
-                    error!("{}, but it's okay", e);
-                }
-                println!("End run()");
-                app_exit_result
-
-            },
-            Command::Checkpoint(opts) => opts.run(),
-            Command::Extract(opts) => opts.run(),
-            Command::Wait(opts) => opts.run(),
-            Command::Daemon(opts) => opts.run(),
+            Command::Install(opts) => opts.run(None),
+            Command::Run(opts) => opts.run(None),
+            Command::Checkpoint(opts) => opts.run(None),
+            Command::Extract(opts) => opts.run(None),
+            Command::Wait(opts) => opts.run(None),
+            Command::Daemon(opts) => opts.run(None),
         }
     }
 }

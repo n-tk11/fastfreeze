@@ -24,6 +24,9 @@ use crate::{
     image_streamer::ImageStreamer,
 };
 
+use std::sync::Arc;
+use tokio::sync::Notify;
+
 /// Extract a FastFreeze image to local disk
 #[derive(StructOpt, PartialEq, Debug, Serialize)]
 #[structopt(after_help("\
@@ -86,7 +89,7 @@ pub fn extract_image(
 }
 
 impl super::CLI for Extract {
-    fn run(self) -> Result<()> {
+    fn run(self,_:Option<Arc<Notify>>) -> Result<()> {
         let Self { image_url, output_dir,
             allow_bad_image_version, passphrase_file, verbose: _
         } = self;

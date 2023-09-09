@@ -22,8 +22,11 @@ mod wait;
 
 use crate::consts::*;
 
+use std::sync::Arc;
+use tokio::sync::Notify;
+
 pub trait CLI {
-    fn run(self) -> anyhow::Result<()>;
+    fn run(self,_:Option<Arc<Notify>>) -> anyhow::Result<()>;
 }
 
 #[derive(Debug)]

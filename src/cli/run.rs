@@ -21,7 +21,9 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, Duration},
     thread,
+    sync::Arc,
 };
+
 use nix::{
     sys::signal,
     unistd::Pid,
@@ -36,7 +38,7 @@ use crate::{
     cli::{ExitCode, install},
     image::{ManifestFetchResult, ImageManifest, shard, check_passphrase_file_exists},
     process::{Command, CommandPidExt, ProcessExt, ProcessGroup, Stdio,
-              spawn_set_ns_last_pid_server, set_ns_last_pid, MIN_PID},
+              spawn_set_ns_last_pid_server, set_ns_last_pid, MIN_PID,monitor_child},
     metrics::{with_metrics, with_metrics_raw, metrics_error_json},
     signal::kill_process_tree,
     util::JsonMerge,
@@ -48,6 +50,8 @@ use crate::{
 };
 use virt::time::Nanos;
 use shlex::Shlex;
+
+use tokio::sync::Notify;
 
 
 
@@ -371,7 +375,7 @@ fn run_from_scratch(
     app_cmd: Vec<OsString>,
 ) -> Result<()>
 {
-    println!("Enter run_from_scratch");
+    
     let inherited_resources = criu::InheritableResources::current()?;
 
     let config = AppConfig {
@@ -415,11 +419,9 @@ fn run_from_scratch(
     cmd.set_child_subreaper();
 
     
-    thread::sleep(Duration::from_secs(5));
     cmd.spawn_with_pid(APP_ROOT_PID)?;
 
     info!("Application is ready, started from scratch");
-    println!("Finishing run from scratch");
     Ok(())
 }
 
@@ -429,9 +431,9 @@ pub enum RunMode {
 }
 
 pub fn determine_run_mode(store: &dyn Store, allow_bad_image_version: bool) -> Result<RunMode> {
-    println!("Going to determine run mode");
+
     let fetch_result = with_metrics("fetch_manifest",
-        || ImageManifest::fetch_from_store(store, allow_bad_image_version),
+        |_| ImageManifest::fetch_from_store(store, allow_bad_image_version),1,
         |fetch_result| match fetch_result {
             ManifestFetchResult::Some(_)              => json!({"manifest": "good",             "run_mode": "restore"}),
             ManifestFetchResult::VersionMismatch {..} => json!({"manifest": "version_mismatch", "run_mode": "run_from_scratch"}),
@@ -490,7 +492,6 @@ fn do_run(
         .wait_for_success()?;
 
     ensure_non_conflicting_pid()?;
-    println!("Entering Do Run");
     // We prepare the store for writes to speed up checkpointing. Notice that
     // we also prepare the store during restore, because we want to make sure
     // we can checkpoint after a restore.
@@ -512,11 +513,11 @@ fn do_run(
             let shard_download_cmds = shard::download_cmds(
                 &img_manifest, passphrase_file.as_ref(), &*store)?;
 
-            with_metrics("restore", ||
+            with_metrics::<_, _, (_, _),_>("restore", |_|
                 restore(
                     image_url, preserved_paths, tcp_listen_remaps,
                     passphrase_file, shard_download_cmds, leave_stopped
-                ).context(ExitCode(EXIT_CODE_RESTORE_FAILURE)),
+                ).context(ExitCode(EXIT_CODE_RESTORE_FAILURE)),1, 
                 |(stats, duration_since_checkpoint)|
                     json!({
                         "stats": stats,
@@ -528,8 +529,8 @@ fn do_run(
             bail!("No application to restore, but running in restore-only mode, aborting"),
         (RunMode::FromScratch, Some(app_args)) => {
             let app_args = app_args.into_iter().map(|s| s.into()).collect();
-            with_metrics("run_from_scratch", ||
-                run_from_scratch(image_url, preserved_paths, passphrase_file, app_args),
+            with_metrics("run_from_scratch", |_|
+                run_from_scratch(image_url, preserved_paths, passphrase_file, app_args),1,
                 |_| json!({}))?;
         }
     }
@@ -566,9 +567,8 @@ fn default_image_name(app_args: &[OsString]) -> Result<String> {
 
 
 impl super::CLI for Run {
-    fn run(self) -> Result<()> {
-        println!("Start Run:run(), with verbal={}",self.verbose);
-        let inner = || -> Result<()> {
+    fn run(self,notify: Option<Arc<Notify>>) -> Result<()> {
+        let inner = |notify: Option<Arc<Notify>>| -> Result<()> {
             let Self {
                 image_url, app_args, on_app_ready_cmd, no_restore,
                 allow_bad_image_version, passphrase_file, preserved_paths,
@@ -576,14 +576,6 @@ impl super::CLI for Run {
                 no_container } = self;
 
             // We allow app_args to be empty. This indicates a restore-only mode.
-
-            for os_str in &app_args {
-                if let Some(s) = os_str.to_str() {
-                    println!("{}", s);
-                } else {
-                    eprintln!("Unable to convert OsString to a valid string");
-                }
-            }
             
             let app_args = if app_args.is_empty() {
                 info!("Running in restore-only mode as no command is given");
@@ -593,7 +585,6 @@ impl super::CLI for Run {
                 Some(app_args)
             };
 
-            println!("url_matching");
             let image_url = match (image_url, app_args.as_ref()) {
                 (Some(image_url), _) => image_url,
                 (None, None) =>
@@ -606,43 +597,31 @@ impl super::CLI for Run {
                 }
             };
             let image_url = ImageUrl::parse(&image_url)?;
-            println!("finish image parse");
+
             let nscaps = container::ns_capabilities()?;
             // Note: the following may fork a child to enter the new PID namespace,
             // The parent will be kept running to monitor the child.
             // The execution continues as the child process.
-            println!("finish check ns_cap");
             use container::NSCapabilities as Cap;
             match (app_name, no_container, &nscaps, install::is_ff_installed()?) {
-                (Some(_),    true,  _, _    ) => println!("--app-name and --no-container are mutually exclusive"),
-                (_,          true,  _, false) => println!("`fastfreeze install` must first be ran"),
-
-                (Some(name), false, Cap::Full, _) => {
-                    println!("case 3");
-                    container::create(&name)?
-                },
-                (None,       false, Cap::Full, _) => {
-                    println!("case 4");
-                    container::create(image_url.image_name())?
-                },
-                (Some(_),    false, _,         _) => println!("--app-name cannot be used as PID namespaces are not available"),
-
-                (None,       false, Cap::MountOnly, false) => { 
-                    println!("case 6");
-                    container::create_without_pid_ns()?
-                },
-                (None,       false, Cap::None,      false) => println!("`fastfreeze install` must first be ran \
+                (Some(_),    true,  _, _    ) => bail!("--app-name and --no-container are mutually exclusive"),
+                (_,          true,  _, false) => bail!("`fastfreeze install` must first be ran"),
+                (Some(name), false, Cap::Full, _) => container::create(&name)?,
+                (None,       false, Cap::Full, _) => container::create(image_url.image_name())?,
+                (Some(_),    false, _,         _) => bail!("--app-name cannot be used as PID namespaces are not available"),
+                (None,       false, Cap::MountOnly, false) => container::create_without_pid_ns()?,
+                (None,       false, Cap::None,      false) => bail!("`fastfreeze install` must first be ran \
                                                                     as namespaces are not available"),
-                (None,       _,     _,              true) => {println!("Final case");},
+                (None,       _,     _,              true) => {},
             };
-            println!("Going to check passphrase");
+
             if let Some(ref passphrase_file) = passphrase_file {
                 check_passphrase_file_exists(passphrase_file)?;
             }
-            println!("Finised check passphrase");
+
             let preserved_paths = preserved_paths.into_iter().collect();
             
-            println!("Going to do_run");
+
             with_checkpoint_restore_lock(|| do_run(
                 image_url, app_args, preserved_paths, tcp_listen_remap,
                 passphrase_file, no_restore, allow_bad_image_version,
@@ -653,12 +632,16 @@ impl super::CLI for Run {
                 Command::new_shell(&on_app_ready_cmd)
                     .spawn()?;
             }
-            Ok(())
-            /*
+            match notify {
+                Some(noti) => {
+                    info!("Goint to notify");
+                    noti.notify_one();
+                },
+                None => (),
+            };
             let app_exit_result = monitor_child(Pid::from_raw(APP_ROOT_PID));
             if app_exit_result.is_ok() {
                 info!("Application exited with exit_code=0");
-                println!("App exited");
             }
 
             // The existance of the app config indicates if the app may b
@@ -666,13 +649,11 @@ impl super::CLI for Run {
             if let Err(e) = AppConfig::remove() {
                 error!("{}, but it's okay", e);
             }
-            println!("End run()");
             app_exit_result
-            */
         };
 
         // We use `with_metrics` to log the exit_code of the application and run time duration
-        with_metrics_raw("run", inner, |result|
+        with_metrics_raw("run", inner, notify,|result|
             match result {
                 Ok(()) => json!({
                     "outcome": "success",
@@ -725,5 +706,11 @@ pub fn new_from_json(data: String)-> Run {
         tcp_listen_remap: Vec::new(),
         app_name: None,
         no_container: false
+    }
+}
+
+impl Run {
+    pub fn daemon_run(self, notify: Arc<Notify>)->Result<()>{
+        Ok(())
     }
 }

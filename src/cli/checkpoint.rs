@@ -24,7 +24,8 @@ use nix::{
     unistd::Pid,
 };
 use structopt::StructOpt;
-use serde::Serialize;
+use serde::{Serialize,Deserialize};
+use serde_json;
 use crate::{
     consts::*,
     store::ImageUrl,
@@ -257,16 +258,17 @@ pub fn do_checkpoint(opts: Checkpoint) -> Result<Stats> {
             .spawn()?
             .join(&mut pgrp);
         pgrp.get_mut(tar_ps).wait()?; // wait for tar to finish
-
+        debug!("Wait Finished(checkpoint261)");
         pgrp.try_wait_for_success()?; // if tar errored, this is where we exit
         // We print this debug message so that in the logs, we can have a timestamp
         // to tell us how long it took. Maybe it would be better to have a metric event.
-        debug!("Filesystem dumped. Finishing dumping processes");
+        debug!("Filesystem dumped. Finishing dumping processes(checkpoint265)");
 
         // Wait for checkpoint to complete
         pgrp.wait_for_success()?;
-
+        debug!("Past wait_for_success(checkpoint269)");
         let stats = img_streamer_progress.wait_for_stats()?;
+        debug!("after wait_for_stats(checkpoint271)"); 
         stats.show();
         Ok(stats)
     }().map_err(|e| {
@@ -338,5 +340,54 @@ impl super::CLI for Checkpoint {
 
             Ok(())
         })
+    }
+}
+
+
+//Checkpoint Json Instance
+#[derive(Debug, Serialize, Deserialize)]
+struct Checkpointj {
+    image_url: String,
+    passphrase_file: String,
+    preserved_paths: String,
+    leave_running: bool,
+    num_shards: u32,
+    cpu_budget: String,
+    verbose: u8,
+}
+
+
+pub fn new_chk_from_json(data: String)-> Checkpoint {
+    let c: Checkpointj = serde_json::from_str(&data).unwrap();
+
+
+    let img_url: Option<String> = match c.image_url.as_str() {
+        "" => None,
+        _ => Some(c.image_url)
+    };
+    let passphrase_file: Option<PathBuf> = match c.passphrase_file.as_str()  {
+        "" => None,
+        _ => Some(PathBuf::from(c.passphrase_file))
+    };
+    let preserved_paths: Vec<PathBuf> = c.preserved_paths.split(':')
+                                        .map(PathBuf::from)
+                                        .collect();
+                          
+    let cpu_budget: CpuBudget = match c.cpu_budget.as_str() {
+        "low" => CpuBudget::Low,
+        "medium" => CpuBudget::Medium,
+        "high" => CpuBudget::High,
+        _ => CpuBudget::Medium,
+    };
+
+    Checkpoint {
+        image_url: img_url,
+        passphrase_file: passphrase_file,
+        preserved_paths: Vec::new(),
+        leave_running: c.leave_running,
+        num_shards: c.num_shards,
+        cpu_budget: cpu_budget,
+        verbose: c.verbose,
+        app_name: None,
     }
 }

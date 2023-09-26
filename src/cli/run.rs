@@ -20,7 +20,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
     time::{SystemTime, Duration},
-    thread,
     sync::Arc,
 };
 
@@ -670,7 +669,7 @@ impl super::CLI for Run {
 
 }
 
-pub fn new_from_json(data: String)-> Run {
+pub fn new_run_from_json(data: String)-> Run {
     let r: Runj = serde_json::from_str(&data).unwrap();
     let splited_args: Vec<String> = Shlex::new(&r.app_args).collect();
 
@@ -698,7 +697,7 @@ pub fn new_from_json(data: String)-> Run {
         image_url: img_url,
         on_app_ready_cmd: on_app_ready,
         passphrase_file: passphrase_file,
-        preserved_paths: preserved_paths,
+        preserved_paths: Vec::new(),
         no_restore: r.no_restore,
         allow_bad_image_version: r.allow_bad_image,
         leave_stopped: r.leave_stopped,
@@ -709,8 +708,4 @@ pub fn new_from_json(data: String)-> Run {
     }
 }
 
-impl Run {
-    pub fn daemon_run(self, notify: Arc<Notify>)->Result<()>{
-        Ok(())
-    }
-}
+

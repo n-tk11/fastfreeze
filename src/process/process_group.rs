@@ -139,7 +139,8 @@ impl ProcessGroup {
         }
 
         if !errors.is_empty() {
-           bail!(ProcessGroupError { errors });
+           debug!("Error from here!!");
+           bail!("with error mesg {}",ProcessGroupError { errors });
         }
 
         Ok(self.children.iter().any(|c| !c.exited && !c.daemon))

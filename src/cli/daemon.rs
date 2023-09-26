@@ -2,17 +2,17 @@ use anyhow::Result;
 use structopt::StructOpt;
 
 use super::{
-    checkpoint::Checkpoint,
+    checkpoint::{new_chk_from_json,Checkpoint},
     extract::Extract,
     install::Install,
-    run::{new_from_json, Run},
+    run::{new_run_from_json, Run},
     wait::Wait,
     CLI,
 };
 
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
-use serde::{Deserialize, Serialize};
+use hyper::{Body, Method, Request, Response, Server};
+use serde::{Serialize};
 use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::sync::Notify;
@@ -60,10 +60,11 @@ async fn run_http_server() -> Result<(), hyper::Error> {
 
 async fn handle_connection(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     match (req.method(), req.uri().path()) {
+       
         (&Method::POST, "/run") => {
             let body_bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
             let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
-            let instance = new_from_json(body_str);
+            let instance = new_run_from_json(body_str);
             let notify = Arc::new(Notify::new());
             let notify2 = notify.clone(); 
             tokio::task::spawn_blocking(move ||{
@@ -77,9 +78,15 @@ async fn handle_connection(req: Request<Body>) -> Result<Response<Body>, Infalli
                 .unwrap())
         },
         (&Method::POST, "/checkpoint") => {
+            let body_bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
+            let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+            let instance = new_chk_from_json(body_str);
+         
+            let _ = instance.run(None);
+
             Ok(Response::builder()
-                .status(hyper::StatusCode::BAD_REQUEST)
-                .body(Body::empty())
+                .status(hyper::StatusCode::OK)
+                .body(Body::from("App checkpointed\n"))
                 .unwrap())
         },
         _ => {

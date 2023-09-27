@@ -605,8 +605,18 @@ impl super::CLI for Run {
                 passphrase_file, no_restore, allow_bad_image_version,
                 leave_stopped))?;
             
-            let mut stream = UnixStream::connect("/tmp/ff.sock")?;
-            stream.write_all(b"hello world")?;
+            //Notify the daemon that app start successfully
+            let mut stream = match UnixStream::connect("/tmp/ff.sock") {
+                        Ok(sock) => sock,
+                        Err(e) => {
+                            println!("Couldn't connect: {e:?}");
+                            -1
+                        }
+                    }
+            if stream != -1 {
+               stream.write_all(b"hello world")?; 
+            }
+            
 
             if let Some(on_app_ready_cmd) = on_app_ready_cmd {
                 // Fire and forget.

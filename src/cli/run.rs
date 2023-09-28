@@ -606,16 +606,14 @@ impl super::CLI for Run {
                 leave_stopped))?;
             
             //Notify the daemon that app start successfully
-            let mut stream = match UnixStream::connect("/tmp/ff.sock") {
-                        Ok(sock) => sock,
+            match UnixStream::connect("/tmp/ff.sock") {
+                        Ok(mut sock) => {
+                            sock.write_all(b"app_started\n")?;
+                        },
                         Err(e) => {
                             println!("Couldn't connect: {e:?}");
-                            -1
                         }
-                    }
-            if stream != -1 {
-               stream.write_all(b"hello world")?; 
-            }
+            };
             
 
             if let Some(on_app_ready_cmd) = on_app_ready_cmd {

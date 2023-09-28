@@ -17,6 +17,7 @@ use std::{
     collections::HashSet,
     path::PathBuf,
     time::{SystemTime, Duration},
+    io::Write
 };
 use nix::{
     poll::{PollFd, PollFlags},
@@ -42,6 +43,7 @@ use crate::{
 };
 use super::run::AppConfig;
 
+use std::os::unix::net::UnixStream;
 
 /// Perform a checkpoint of the running application
 #[derive(StructOpt, PartialEq, Debug, Serialize)]
@@ -333,6 +335,16 @@ impl super::CLI for Checkpoint {
                 kill_process_tree(Pid::from_raw(APP_ROOT_PID), signal::SIGKILL)
                     .context("Failed to kill application")?;
             }
+            
+            //Notify the daemon that app start successfully
+            match UnixStream::connect("/tmp/ff.sock") {
+                        Ok(mut sock) => {
+                            sock.write_all(b"app_checkpointed\n")?;
+                        },
+                        Err(e) => {
+                            println!("Couldn't connect: {e:?}");
+                        }
+            };
 
             Ok(())
         })

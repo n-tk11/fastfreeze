@@ -82,7 +82,8 @@ fn main() {
         }
         match UnixStream::connect("/tmp/ff.sock") {
                         Ok(mut sock) => {
-                            sock.write_all(b"app_exiting\n").unwrap();
+                            let msg = format!("app_exiting {}\n",(exit_code as i32));
+                            sock.write_all(msg.as_bytes()).unwrap();
                         },
                         Err(e) => {
                             println!("Couldn't connect: {e:?}");

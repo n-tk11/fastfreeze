@@ -53,6 +53,7 @@ DIST_BINS := \
 	deps/criu-image-streamer/criu-image-streamer \
 	deps/gcsthin/gcsthin \
 	deps/set_ns_last_pid/set_ns_last_pid \
+	deps/ff_daemon/ff_daemon \
 	target/$(BUILD)/fastfreeze \
 	$(shell which pv) \
 	$(shell which lz4) \

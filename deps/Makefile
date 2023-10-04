@@ -25,6 +25,7 @@ BUILDS := \
 	build_criu_image_streamer \
 	build_gcsthin \
 	build_set_ns_last_pid \
+	build_ff_daemon \
 
 .PHONY: $(BUILDS) clean
 
@@ -50,6 +51,9 @@ build_gcsthin: | $(DEPS_FILE) $(RUSTUP_DEP_FILE)
 build_set_ns_last_pid: | $(DEPS_FILE)
 	$(MAKE) -C set_ns_last_pid
 
+build_ff_daemon: | $(DEPS_FILE) $(RUSTUP_DEP_FILE)
+	$(MAKE) -C ff_daemon
+
 clean:
 	$(MAKE) -C criu mrproper
 	$(MAKE) -C libvirtcpuid clean
@@ -57,3 +61,5 @@ clean:
 	$(MAKE) -C criu-image-streamer clean
 	$(MAKE) -C gcsthin clean
 	$(MAKE) -C set_ns_last_pid clean
+	$(MAKE) -C ff_daemon clean
+	

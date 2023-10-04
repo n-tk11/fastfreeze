@@ -247,6 +247,14 @@ To enable ptrace, there are two options:
 
 ### Tutorial
 
+#### To use ff_daemon
+```
+USAGE:
+    ff_daemon
+```
+You can see details of the ff_daemon API by open the file [api-doc](https://github.com/n-tk11/fastfreeze/blob/master/api_doc.yaml) in [SwaggerEditor](https://editor-next.swagger.io/)
+
+#### For simple use
 You may try out FastFreeze with the following:
 
 ```bash
@@ -338,12 +346,6 @@ In this example, we used the local file system to store the checkpoint image,
 but in practice one would use something like AWS S3, or GCS.
 
 ## Detailed Usage
-
-### To use ff_daemon
-```
-USAGE:
-    ff_daemon
-```
 
 Below is shown a synopsis of the FastFreeze available commands.
 

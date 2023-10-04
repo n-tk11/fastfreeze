@@ -1,0 +1,163 @@
+openapi: 3.0.0
+
+info:
+  title: API Specification for Fastfreeze
+  version: '1.0'
+
+server:
+  - url: http://localhost:7878/api/v1
+
+
+tags:
+  - name: Operations
+paths: 
+  /run: 
+    post:
+      tags: 
+        - Operations
+      summary: Run application. 
+      description: Run application. If a checkpoint image exists, the application is restored. Otherwise, the application is run from scratch
+      requestBody:
+        description: run arguments and options
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/run_param'
+        required: true
+      responses: 
+        '200':
+          description: Application start succesfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Application restore successfully
+        '400':
+          description: Bad request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: app_args not complete
+        '500':
+          description: Internal fastfreeze error
+          content: 
+            text/plain: 
+              schema:
+                type: string 
+                example: Cannot spawn process with pid
+  /checkpoint: 
+    post:
+      tags: 
+        - Operations
+      summary: checkpoint application. 
+      description: Perform a checkpoint of the running application
+      requestBody:
+        description: run arguments and options
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/chk_param'
+        required: true
+      responses: 
+        '200':
+          description: Application checkpoint succesfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Application checkpoint successfully
+        '400':
+          description: Bad request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: args not complete
+        '500':
+          description: Internal fastfreeze error
+          content: 
+            text/plain: 
+              schema:
+                type: string 
+                example: cannot access checkpoint filesystem
+
+components:
+  schemas:
+    run_param:
+      type: object
+      properties:
+        app_args:
+          type: string
+          example: bash -c 'for i in $(seq 100); do echo $i; sleep 1; done'
+          default: ""
+        image_url: 
+          type: string
+          example: file:/tmp/ff
+          default: ""
+        on_app_ready: 
+          type: string
+          example: ping 8.8.8.8
+          default: ""
+        passphrase_file:
+          type: string
+          example: /etc/pass
+          default: ""
+        preserved_paths:
+          type: string
+          example: /data
+          default: ""
+        no_restore:
+          type: boolean
+          example: false
+          default: false
+        allow_bad_image:
+          type: boolean
+          example: true
+          default: false
+        leave_stopped:
+          type: boolean
+          example: true
+          default: false
+        verbose:
+          type: integer
+          example: 3
+          default: 0
+        envs:
+          type: array
+          example: ["FF_APP_LD_LIBRARY_PATH=/usr/local/lib", "S3_CMD='aws s3'"]
+          defaulr: []
+    chk_param:
+      type: object
+      properties:
+        leave_running:
+          type: string
+          example: true
+          default: false
+        image_url: 
+          type: string
+          example: file:/tmp/ff
+          default: ""
+        passphrase_file:
+          type: string
+          example: /etc/pass
+        preserved_paths:
+          type: string
+          example: /data
+          default: ""
+        num_shards:
+          type: integer
+          example: 2 
+          default: 4
+        cpu_budget:
+          type: string
+          enum: [low, medium, high]
+          default: medium
+        verbose:
+          type: integer
+          example: 3
+          default: 0
+        envs:
+          type: array
+          example: ["S3_CMD='aws s3'"]
+          default: []

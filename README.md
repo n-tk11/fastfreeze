@@ -217,6 +217,8 @@ RUN set -ex; \
     tar xJf - -C /opt; \
   ln -s /opt/fastfreeze/fastfreeze /usr/local/bin; \
   fastfreeze install
+# To use ff_daemon
+RUN ln -s /opt/fastfreeze/bin/ff_daemon
 ```
 
 The `install` command overrides the system loader `/lib64/ld-linux-x86-64.so.2`,
@@ -336,6 +338,12 @@ In this example, we used the local file system to store the checkpoint image,
 but in practice one would use something like AWS S3, or GCS.
 
 ## Detailed Usage
+
+### To use ff_daemon
+```
+USAGE:
+    ff_daemon
+```
 
 Below is shown a synopsis of the FastFreeze available commands.
 
@@ -493,3 +501,5 @@ License
 
 FastFreeze is licensed under the
 [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0).
+
+

@@ -16,3 +16,6 @@
 [submodule "deps/gcsthin"]
 	path = deps/gcsthin
 	url = https://github.com/twosigma/gcsthin.git
+[submodule "deps/ff_daemon"]
+	path = deps/ff_daemon
+	url = https://github.com/n-tk11/ff_daemon.git

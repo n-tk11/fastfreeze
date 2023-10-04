@@ -14,13 +14,15 @@
 
 use anyhow::{Result, Context};
 use std::{
-    io::{BufReader, BufWriter},
+    io::{BufReader, BufWriter,Write},
     collections::HashSet,
     ffi::OsString,
     fs,
     path::{Path, PathBuf},
     time::{SystemTime, Duration}
 };
+use std::os::unix::net::UnixStream;
+
 use nix::{
     sys::signal,
     unistd::Pid,
@@ -397,7 +399,7 @@ fn run_from_scratch(
     cmd.spawn_with_pid(APP_ROOT_PID)?;
 
     info!("Application is ready, started from scratch");
-
+    
     Ok(())
 }
 
@@ -602,6 +604,17 @@ impl super::CLI for Run {
                 image_url, app_args, preserved_paths, tcp_listen_remap,
                 passphrase_file, no_restore, allow_bad_image_version,
                 leave_stopped))?;
+            
+            //Notify the daemon that app start successfully
+            match UnixStream::connect("/tmp/ff.sock") {
+                        Ok(mut sock) => {
+                            sock.write_all(b"app_started\n")?;
+                        },
+                        Err(e) => {
+                            println!("Couldn't connect: {e:?}");
+                        }
+            };
+            
 
             if let Some(on_app_ready_cmd) = on_app_ready_cmd {
                 // Fire and forget.

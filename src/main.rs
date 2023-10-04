@@ -48,6 +48,10 @@ use crate::{
     signal::trap_sigterm_and_friends,
 };
 
+use std::os::unix::net::UnixStream;
+use std::io::Write;
+
+
 fn main() {
     fn do_main() -> Result<()> {
         // We have to be exempt from time virtualization because we use
@@ -76,6 +80,15 @@ fn main() {
         if exit_code == EXIT_CODE_RESTORE_FAILURE {
             log::error!("You may try again with --no-restore to run the application from scratch");
         }
+        match UnixStream::connect("/tmp/ff.sock") {
+                        Ok(mut sock) => {
+                            let msg = format!("app_exiting {}\n",(exit_code as i32));
+                            sock.write_all(msg.as_bytes()).unwrap();
+                        },
+                        Err(e) => {
+                            println!("Couldn't connect: {e:?}");
+                        }
+        };
         std::process::exit(exit_code as i32);
     }
 }

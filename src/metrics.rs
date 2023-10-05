@@ -14,7 +14,7 @@
 
 use anyhow::{Result, Context};
 use std::{
-    ffi::OsString,
+    ffi::{OsString,OsStr},
     time::Instant,
 };
 use crate::{
@@ -45,8 +45,10 @@ pub fn emit_metrics(event: Value) -> Result<Option<Process>> {
         "cli_args": *ARGS_JSON,
     }).merge(event);
 
-    let p = Command::new_shell(&metrics_recorder_path)
-        .arg(&serde_json::to_string(&payload)?)
+    let payload_str = &serde_json::to_string(&payload)?;
+    let metrics_format = format!("{:?} '{}\n'",metrics_recorder_path,payload_str);
+    let metrics_osstr: OsString = OsStr::new(&metrics_format).to_os_string();
+    let p = Command::new_shell(metrics_osstr)
         .show_cmd_on_spawn(log_enabled!(log::Level::Trace))
         .spawn()
         .context("Failed to spawn the metrics program")?;

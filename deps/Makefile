@@ -11,7 +11,7 @@ $(RUSTUP_DEP_FILE):
 DEPS_FILE=.deps-debian-v1-$(shell hostname)
 $(DEPS_FILE):
 	[ -e criu/Makefile ] || (git submodule sync && git submodule update --init)
-	sudo apt-get install -y --no-install-recommends \
+	apt-get install -y --no-install-recommends \
 		build-essential pkg-config \
 		libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler protobuf-compiler \
 		libbsd-dev iproute2 libcap-dev libnl-3-dev libnet-dev libaio-dev \
@@ -25,7 +25,6 @@ BUILDS := \
 	build_criu_image_streamer \
 	build_gcsthin \
 	build_set_ns_last_pid \
-	build_ff_daemon \
 
 .PHONY: $(BUILDS) clean
 
@@ -51,8 +50,6 @@ build_gcsthin: | $(DEPS_FILE) $(RUSTUP_DEP_FILE)
 build_set_ns_last_pid: | $(DEPS_FILE)
 	$(MAKE) -C set_ns_last_pid
 
-build_ff_daemon: | $(DEPS_FILE) $(RUSTUP_DEP_FILE)
-	$(MAKE) -C ff_daemon
 
 clean:
 	$(MAKE) -C criu mrproper
@@ -61,5 +58,4 @@ clean:
 	$(MAKE) -C criu-image-streamer clean
 	$(MAKE) -C gcsthin clean
 	$(MAKE) -C set_ns_last_pid clean
-	$(MAKE) -C ff_daemon clean
 	
